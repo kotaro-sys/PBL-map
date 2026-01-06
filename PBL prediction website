@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Grab Fare Estimator (AI Powered)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script src="model.js"></script>
+
+  <style>
+    :root { --border:#e5e7eb; --text:#111827; --muted:#6b7280; --card:#ffffff; --bg:#f9fafb; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color:var(--text); background:var(--bg); }
+    header { padding: 16px 18px; border-bottom: 1px solid var(--border); background:#fff; }
+    header h1 { margin:0; font-size:18px; }
+    header p { margin:6px 0 0; color:var(--muted); font-size:13px; }
+
+    .wrap { display: flex; gap: 14px; padding: 14px; align-items: stretch; min-height: calc(100vh - 70px); }
+    .panel { width: 380px; flex: 0 0 380px; background: var(--card); border:1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .panel h2 { margin: 0 0 10px; font-size: 15px; }
+    .grid { display:grid; gap:10px; }
+    label { display:block; font-size: 12px; color: var(--muted); margin: 0 0 4px; }
+    input, select, button { width:100%; padding:10px 10px; border:1px solid var(--border); border-radius: 10px; font-size: 14px; background:#fff; }
+    button { cursor:pointer; font-weight: 600; }
+    .btnRow { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .status { font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .cards { display:grid; gap:10px; margin-top: 12px; }
+    .card { border:1px solid var(--border); border-radius: 12px; padding: 12px; background:#fff; }
+    .cardTitle { font-size: 12px; color: var(--muted); }
+    .cardValue { font-size: 18px; font-weight: 700; margin-top: 3px; }
+    .row2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .tiny { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .mapWrap { flex: 1 1 auto; min-width: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #fff; }
+    #map { width: 100%; height: calc(100vh - 70px - 28px); min-height: 520px; }
+  </style>
+</head>
+
+<body>
+<header>
+  <h1>Grab Fare Estimator (AI Powered)</h1>
+  <p>Enter trip details to visualize the route and compare <b>AI Prediction</b> vs <b>Actual</b> fare.</p>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>Trip Inputs</h2>
+    <div class="grid">
+      <div>
+        <label for="from">📍 Pickup point</label>
+        <input id="from" value="University of Tsukuba Malaysia (UTMy)" readonly />
+        <label for="to">⛳ Drop-off point</label>
+        <select id="to">
+          <option value="" disabled selected>Select a destination</option>
+          <option value="Sunway Pyramid Mall">Sunway Pyramid Mall</option>
+          <option value="Mid Valley Mega Mall">Mid Valley Mega Mall</option>
+          <option value="KLCC Twin Towers">KLCC Twin Towers</option>
+          <option value="1 Mont Kiara">1 Mont Kiara</option>
+          <option value="Lalaport Bukit Bintang">Lalaport Bukit Bintang</option>
+          <option value="KLIA">KLIA</option>
+          <option value="1 Utama Shopping mall">1 Utama Shopping mall</option>
+          <option value="Laurel Residence">Laurel Residence</option>
+          <option value="Taylor's University">Taylor's University</option>
+          <option value="Batu Caves Temple">Batu Caves Temple</option>
+        </select>
+
+        <div class="row2">
+          <div>
+            <label for="time">⏰ Time</label>
+            <input id="time" type="time" value="18:00" />
+          </div>
+          <div>
+            <label for="day">📅 Day</label>
+            <select id="day">
+              <option>Monday</option>
+              <option>Tuesday</option>
+              <option>Wednesday</option>
+              <option>Thursday</option>
+              <option>Friday</option>
+              <option>Saturday</option>
+              <option>Sunday</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="weather">🌤 Weather</label>
+          <select id="weather">
+            <option value="Clear">Clear</option>
+            <option value="Rain">Rain</option>
+            <option value="Thunder">Thunder</option>
+          </select>
+        </div>
+
+        <div class="btnRow">
+          <button id="btnRoute">Find route</button>
+          <button id="btnEstimate">Estimate & Compare</button>
+        </div>
+        <div class="status" id="status">Loading dataset…</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="row2">
+        <div class="card">
+          <div class="cardTitle">Distance</div>
+          <div class="cardValue" id="distanceText">—</div>
+        </div>
+        <div class="card">
+          <div class="cardTitle">Duration</div>
+          <div class="cardValue" id="durationText">—</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="card">
+          <div class="cardTitle">AI Predicted fare (RM)</div>
+          <div class="cardValue" id="estFareText" style="color:#00b14f">—</div>
+        </div>
+        <div class="card">
+          <div class="cardTitle">Actual fare (RM)</div>
+          <div class="cardValue" id="actFareText">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">Difference (Actual − Predicted)</div>
+        <div class="cardValue" id="diffText">—</div>
+        <div class="tiny" id="matchInfo">
+          Actual fare is computed from the dataset. Predicted fare comes from your AI model.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mapWrap">
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+  // =========================
+  // Map + Routing (Original)
+  // =========================
+  const map = L.map("map").setView([3.1390, 101.6869], 12);
+  setTimeout(() => map.invalidateSize(true), 300);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  window.addEventListener("resize", () => map.invalidateSize());
+
+  let fromMarker = null, toMarker = null, routeLine = null, lastRoute = null;
+
+  const el = {
+    status: document.getElementById("status"),
+    from: document.getElementById("from"),
+    to: document.getElementById("to"),
+    time: document.getElementById("time"),
+    day: document.getElementById("day"),
+    weather: document.getElementById("weather"),
+    btnRoute: document.getElementById("btnRoute"),
+    btnEstimate: document.getElementById("btnEstimate"),
+    distanceText: document.getElementById("distanceText"),
+    durationText: document.getElementById("durationText"),
+    estFareText: document.getElementById("estFareText"),
+    actFareText: document.getElementById("actFareText"),
+    diffText: document.getElementById("diffText"),
+    matchInfo: document.getElementById("matchInfo"),
+  };
+
+  function setStatus(msg){ el.status.textContent = msg; }
+  function rm(x){ return x == null ? "—" : `RM ${Number(x).toFixed(2)}`; }
+
+  function clearMap(){
+    if (fromMarker) map.removeLayer(fromMarker);
+    if (toMarker) map.removeLayer(toMarker);
+    if (routeLine) map.removeLayer(routeLine);
+    fromMarker = toMarker = routeLine = null;
+    lastRoute = null;
+  }
+
+  async function geocode(q){
+    const url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(q);
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+    return data && data.length > 0 ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+  }
+
+  async function routeOSRM(from, to){
+    const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data && data.code === "Ok" ? { distance_m: data.routes[0].distance, duration_s: data.routes[0].duration, geojson: data.routes[0].geometry } : null;
+  }
+
+  async function findRoute(){
+    const fromQ = "University of Tsukuba Malaysia, Kuala Lumpur";
+    const toQ = el.to.value.trim();
+    if (!toQ) { setStatus("Please select a destination."); return; }
+
+    try{
+      clearMap();
+      setStatus("Searching...");
+      const [a,b] = await Promise.all([geocode(fromQ), geocode(toQ)]);
+      if (!a || !b) { setStatus("Location not found."); return; }
+
+      const rt = await routeOSRM(a,b);
+      if (!rt) { setStatus("Route not found."); return; }
+
+      fromMarker = L.marker([a.lat, a.lon]).addTo(map).bindPopup("Pickup").openPopup();
+      toMarker = L.marker([b.lat, b.lon]).addTo(map).bindPopup("Drop-off");
+      routeLine = L.geoJSON(rt.geojson, { style: { weight: 5, color: '#00b14f' } }).addTo(map);
+      map.fitBounds(routeLine.getBounds(), { padding:[30,30] });
+
+      lastRoute = { distance_km: rt.distance_m / 1000, duration_min: rt.duration_s / 60 };
+      el.distanceText.textContent = `${lastRoute.distance_km.toFixed(2)} km`;
+      el.durationText.textContent = `${Math.round(lastRoute.duration_min)} min`;
+      setStatus("Route ready.");
+    } catch(err){ setStatus("Error loading route."); }
+  }
+
+  // =========================
+  // Dataset Logic (Original)
+  // =========================
+  let dataset = [];
+  function parseCSV(text){
+    const lines = text.trim().split(/\r?\n/);
+    const headers = lines[0].split(",").map(h => h.trim());
+    return lines.slice(1).map(line => {
+      const cols = line.split(",").map(c => c.trim());
+      const row = {};
+      headers.forEach((h,i) => row[h] = cols[i]);
+      return row;
+    });
+  }
+
+  async function loadDataset(){
+    try{
+      const res = await fetch("./data.csv", { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      const text = await res.text();
+      dataset = parseCSV(text).map(r => ({
+        ...r,
+        distance_km: Number(r.distance_km),
+        duration_min: Number(r.duration_min),
+        price_rm: Number(r.price_rm),
+        hour: r.time ? Number(r.time.split(":")[0]) : null,
+        weekend: (r.day_type === "Saturday" || r.day_type === "Sunday") ? 1 : 0
+      }));
+      setStatus(`Dataset loaded (${dataset.length} trips).`);
+    } catch(err){ setStatus("Dataset (data.csv) not found."); }
+  }
+
+  function actualFareFromDataset(query){
+    if (!dataset.length) return { value: null, used: 0, note: "No data." };
+    const matches = dataset.filter(d => 
+      Math.abs(d.distance_km - query.distance_km) <= 1.5 && 
+      Math.abs(d.duration_min - query.duration_min) <= 7 &&
+      (d.weekend === query.weekend)
+    );
+    if (!matches.length) return { value: null, used: 0, note: "No matches in CSV." };
+    const avg = matches.reduce((s,x)=>s + x.price_rm, 0) / matches.length;
+    return { value: avg, note: `Matched ${matches.length} trips from CSV.` };
+  }
+
+  // =========================
+  // ★重要：AIモデル予測 (Modified)
+  // =========================
+  function estimateFare({ distance_km, duration_min, peak, rain, thunder, weekend }){
+    // Python学習時の並び順に合わせてください [距離, 時間, ピーク, 雨, 雷, 週末]
+    const input = [distance_km, duration_min, peak, rain, thunder, weekend];
+    try {
+      return score(input); // model.js内の関数
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  }
+
+  function estimateAndCompare(){
+    if (!lastRoute) { setStatus("Find route first."); return; }
+    
+    const h = Number(el.time.value.split(":")[0]);
+    const weekend = (el.day.value === "Saturday" || el.day.value === "Sunday") ? 1 : 0;
+    const peak = (h >= 7 && h <= 9) || (h >= 17 && h <= 20) ? 1 : 0;
+    const w = el.weather.value.toLowerCase();
+
+    const features = {
+      ...lastRoute,
+      peak,
+      weekend,
+      rain: w === "rain" ? 1 : 0,
+      thunder: w === "thunder" ? 1 : 0
+    };
+
+    const est = estimateFare(features);
+    const act = actualFareFromDataset(features);
+
+    el.estFareText.textContent = rm(est);
+    el.actFareText.textContent = rm(act.value);
+    el.diffText.textContent = act.value ? rm(act.value - est) : "—";
+    el.matchInfo.textContent = act.note;
+    setStatus("AI Prediction complete.");
+  }
+
+  el.btnRoute.addEventListener("click", findRoute);
+  el.btnEstimate.addEventListener("click", estimateAndCompare);
+  el.to.addEventListener("change", findRoute);
+  loadDataset();
+</script>
+</body>
+</html>
